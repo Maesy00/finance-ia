@@ -1,13 +1,14 @@
 {
-  "name": "Finance Nerd",
-  "short_name": "Fin. Nerd",
+  "name": "Finance.ia",
+  "short_name": "Finance.ia",
   "description": "Gestion des flux financiers, biens immobiliers et épargne.",
+  "lang": "fr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#EEF3F0",
-  "theme_color": "#057A55",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "icons": [
     {
       "src": "images/icon-192.png",

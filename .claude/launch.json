@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "finance-nerd",
+      "name": "finance-ia-dev",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["devserver.py"],
       "port": 5502

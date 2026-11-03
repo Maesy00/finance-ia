@@ -1,7 +1,7 @@
--- Finance Nerd — tables Supabase pour la synchronisation multi-appareils.
+-- Finance.ia — tables Supabase pour la synchronisation multi-appareils.
 -- À exécuter une seule fois dans l'éditeur SQL du projet Supabase dédié
--- "Finance Nerd" (projet séparé d'Aurora/Inventory.ia/Ironly pour isoler les
--- données financières).
+-- "Finance.ia" (projet séparé de Divers.ia, qui héberge les autres apps,
+-- pour isoler les données financières).
 
 create extension if not exists pgcrypto;
 

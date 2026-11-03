@@ -56,45 +56,59 @@ const App = (() => {
   function showToast(msg) {
     const el = document.getElementById("toast");
     el.textContent = msg;
-    el.classList.remove("hidden");
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add("visible"));
     clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => el.classList.add("hidden"), 2200);
+    showToast._t = setTimeout(() => {
+      el.classList.remove("visible");
+      setTimeout(() => (el.hidden = true), 250);
+    }, 2400);
   }
 
   // ---------------------------------------------------------------
-  // Modale générique (même pattern que les autres apps)
+  // Feuille du bas (modale) — même langage que les autres apps
   // ---------------------------------------------------------------
 
   function openModal(contentHTML) {
-    document.getElementById("modal-root").innerHTML = `<div class="modal-overlay"><div class="modal-card">${contentHTML}</div></div>`;
+    document.getElementById("modal-root").innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <button type="button" class="icon-btn modal-close-btn" data-action="close-modal" aria-label="Fermer">
+            <i class="ph ph-x" aria-hidden="true"></i>
+          </button>
+          ${contentHTML}
+        </div>
+      </div>`;
   }
 
   function closeModal() {
     document.getElementById("modal-root").innerHTML = "";
   }
 
-  function confirmDialog(message) {
+  // window.confirm() est désactivé en silence dans une app installée sur
+  // l'écran d'accueil de l'iPhone : on utilise donc une vraie feuille.
+  function confirmDialog(message, confirmLabel = "Supprimer") {
     return new Promise((resolve) => {
       openModal(`
         <p class="confirm-message">${escapeHtml(message)}</p>
-        <div class="session-actions">
-          <button type="button" class="btn btn-ghost" data-action="confirm-no">Annuler</button>
-          <button type="button" class="btn btn-primary" data-action="confirm-yes">Confirmer</button>
+        <div class="btn-row confirm-actions">
+          <button type="button" class="btn btn-secondary" data-action="confirm-no">Annuler</button>
+          <button type="button" class="btn btn-danger" data-action="confirm-yes">${escapeHtml(confirmLabel)}</button>
         </div>
+        <div style="height: var(--s-5)"></div>
       `);
       const root = document.getElementById("modal-root");
       root.onclick = (e) => {
-        if (e.target.classList.contains("modal-overlay")) {
-          closeModal();
-          resolve(false);
-          return;
-        }
         if (e.target.closest('[data-action="confirm-yes"]')) {
           closeModal();
           resolve(true);
           return;
         }
-        if (e.target.closest('[data-action="confirm-no"]')) {
+        if (
+          e.target.classList.contains("modal-overlay") ||
+          e.target.closest('[data-action="confirm-no"], [data-action="close-modal"]')
+        ) {
           closeModal();
           resolve(false);
         }
@@ -108,8 +122,13 @@ const App = (() => {
 
   function switchView(view) {
     currentView = view;
-    document.querySelectorAll(".view").forEach((el) => el.classList.toggle("hidden", el.id !== `view-${view}`));
-    document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === view));
+    document.querySelectorAll(".tab-panel").forEach((el) => el.classList.toggle("active", el.id === `view-${view}`));
+    document.querySelectorAll(".nav-btn").forEach((btn) => {
+      const active = btn.dataset.view === view;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    window.scrollTo(0, 0);
   }
 
   // ---------------------------------------------------------------
@@ -128,7 +147,7 @@ const App = (() => {
       : "";
     const propBadge = propName ? `<span class="badge badge-property">${escapeHtml(propName)}</span>` : "";
     const shareBadge = flow.shared
-      ? `<span class="badge badge-share">👥 ${flow.shareMode === "amount"
+      ? `<span class="badge badge-share"><i class="ph ph-users" aria-hidden="true"></i>${flow.shareMode === "amount"
           ? `${Calc.formatEUR(Calc.myAmount(flow, settings.defaultSharePercent))} pour moi`
           : Calc.formatPercent(Calc.effectiveSharePercent(flow, settings.defaultSharePercent))}</span>`
       : "";
@@ -251,63 +270,69 @@ const App = (() => {
     };
     const isAmountMode = f.shareMode === "amount";
     return `
-      <h3 class="modal-title">${isEdit ? "Modifier le flux" : "Nouveau flux"}</h3>
+      <h2 class="sheet-title">${isEdit ? "Modifier le flux" : "Nouveau flux"}</h2>
       <form id="flow-form">
-        <label class="field"><span>Libellé</span>
-          <input type="text" id="flow-label" required value="${escapeHtml(f.label)}" placeholder="Ex. Salaire, Crédit Immobilier Ornano…">
-        </label>
-        <label class="field"><span>Montant (€)</span>
-          <input type="text" id="flow-amount" required inputmode="decimal" value="${f.amount !== "" ? Number(f.amount).toFixed(2) : ""}">
-        </label>
-        <label class="field"><span>Compte impacté</span>
-          <select id="flow-account">${accountSelectOptionsHTML(f.accountName || ACCOUNTS[0])}</select>
-        </label>
-        <label class="field"><span>Type de flux</span>
-          <select id="flow-type">
+        <div class="field">
+          <label class="field-label" for="flow-label">Libellé</label>
+          <input class="input" type="text" id="flow-label" required value="${escapeHtml(f.label)}" placeholder="Ex : Salaire, Crédit immobilier Ornano">
+        </div>
+        <div class="field">
+          <label class="field-label" for="flow-amount">Montant (€)</label>
+          <input class="input" type="text" id="flow-amount" required inputmode="decimal" autocomplete="off" placeholder="0,00" value="${f.amount !== "" ? Number(f.amount).toFixed(2) : ""}">
+        </div>
+        <div class="field">
+          <label class="field-label" for="flow-account">Compte impacté</label>
+          <select class="input" id="flow-account">${accountSelectOptionsHTML(f.accountName || ACCOUNTS[0])}</select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="flow-type">Type de flux</label>
+          <select class="input" id="flow-type">
             <option value="credit" ${f.flowType === "credit" ? "selected" : ""}>Crédit</option>
             <option value="debit_obligatoire" ${f.flowType === "debit_obligatoire" ? "selected" : ""}>Débit — prélèvement obligatoire</option>
             <option value="debit_facultatif" ${f.flowType === "debit_facultatif" ? "selected" : ""}>Débit — prélèvement facultatif</option>
             <option value="epargne" ${f.flowType === "epargne" ? "selected" : ""}>Épargne</option>
           </select>
-        </label>
-        <label class="field"><span>Fréquence</span>
-          <select id="flow-frequency">
+        </div>
+        <div class="field">
+          <label class="field-label" for="flow-frequency">Fréquence</label>
+          <select class="input" id="flow-frequency">
             <option value="mensuel" ${f.frequency === "mensuel" ? "selected" : ""}>Mensuel</option>
             <option value="trimestriel" ${f.frequency === "trimestriel" ? "selected" : ""}>Trimestriel</option>
             <option value="annuel" ${f.frequency === "annuel" ? "selected" : ""}>Annuel</option>
             <option value="ponctuel" ${f.frequency === "ponctuel" ? "selected" : ""}>Ponctuel</option>
           </select>
-        </label>
-        <label class="field"><span>Bien immobilier</span>
-          <select id="flow-property">${propertySelectOptionsHTML(f.propertyId)}</select>
-        </label>
+        </div>
+        <div class="field">
+          <label class="field-label" for="flow-property">Bien immobilier</label>
+          <select class="input" id="flow-property">${propertySelectOptionsHTML(f.propertyId)}</select>
+        </div>
 
-        <label class="field-checkbox">
-          <input type="checkbox" id="flow-shared" ${f.shared ? "checked" : ""}>
+        <label class="switch-row" for="flow-shared">
           <span>Flux partagé avec Jérôme</span>
+          <input class="switch" type="checkbox" id="flow-shared" ${f.shared ? "checked" : ""}>
         </label>
 
         <div id="flow-share-detail" class="${f.shared ? "" : "hidden"}">
-          <div class="radio-row">
-            <label><input type="radio" name="share-mode" value="percentage" ${!isAmountMode ? "checked" : ""}> Pourcentage</label>
-            <label><input type="radio" name="share-mode" value="amount" ${isAmountMode ? "checked" : ""}> Montant fixe</label>
+          <div class="segmented">
+            <label><input type="radio" name="share-mode" value="percentage" ${!isAmountMode ? "checked" : ""}><span>Pourcentage</span></label>
+            <label><input type="radio" name="share-mode" value="amount" ${isAmountMode ? "checked" : ""}><span>Montant fixe</span></label>
           </div>
-          <label class="field" id="share-percent-field" style="${isAmountMode ? "display:none" : ""}">
-            <span>Ma part (%)</span>
-            <input type="text" id="flow-share-percent" inputmode="decimal" value="${f.sharePercent ?? settings.defaultSharePercent}">
-          </label>
-          <label class="field" id="share-amount-field" style="${isAmountMode ? "" : "display:none"}">
-            <span>Montant qui me revient (€)</span>
-            <input type="text" id="flow-share-amount" inputmode="decimal" value="${f.shareAmountMine !== "" && f.shareAmountMine != null ? Number(f.shareAmountMine).toFixed(2) : ""}">
-          </label>
+          <div class="field" id="share-percent-field" style="${isAmountMode ? "display:none" : ""}">
+            <label class="field-label" for="flow-share-percent">Ma part (%)</label>
+            <input class="input" type="text" id="flow-share-percent" inputmode="decimal" autocomplete="off" value="${f.sharePercent ?? settings.defaultSharePercent}">
+          </div>
+          <div class="field" id="share-amount-field" style="${isAmountMode ? "" : "display:none"}">
+            <label class="field-label" for="flow-share-amount">Montant qui me revient (€)</label>
+            <input class="input" type="text" id="flow-share-amount" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${f.shareAmountMine !== "" && f.shareAmountMine != null ? Number(f.shareAmountMine).toFixed(2) : ""}">
+          </div>
         </div>
 
-        <p id="flow-error" class="auth-error hidden"></p>
+        <p id="flow-error" class="form-error hidden"></p>
 
-        <div class="session-actions">
+        <div class="sheet-actions">
           ${isEdit
-            ? `<button type="button" class="btn btn-ghost" data-action="delete-flow" data-flow-id="${f.id}">Supprimer</button>`
-            : `<button type="button" class="btn btn-ghost" data-action="close-modal">Annuler</button>`}
+            ? `<button type="button" class="btn btn-danger" data-action="delete-flow" data-flow-id="${f.id}">Supprimer</button>`
+            : `<button type="button" class="btn btn-secondary" data-action="close-modal">Annuler</button>`}
           <button type="submit" class="btn btn-primary">Enregistrer</button>
         </div>
       </form>
@@ -400,7 +425,7 @@ const App = (() => {
     if (props.length === 0) {
       tabsEl.innerHTML = "";
       summaryEl.innerHTML = "";
-      listEl.innerHTML = `<p class="empty-hint">Ajoute un bien (Ornano, Belleville…) pour classer tes flux par appartement.</p>`;
+      listEl.innerHTML = `<p class="placeholder">Ajoute un bien (Ornano, Belleville…) pour classer tes flux par appartement.</p>`;
       return;
     }
 
@@ -409,7 +434,7 @@ const App = (() => {
     }
 
     tabsEl.innerHTML = props
-      .map((p) => `<button type="button" class="segmented-btn ${p.id === currentPropertyTab ? "active" : ""}" data-property-id="${p.id}">${escapeHtml(p.name)}</button>`)
+      .map((p) => `<button type="button" class="chip ${p.id === currentPropertyTab ? "active" : ""}" data-property-id="${p.id}">${escapeHtml(p.name)}</button>`)
       .join("");
 
     const settings = Storage.getSettings();
@@ -417,7 +442,7 @@ const App = (() => {
     summaryEl.innerHTML = summaryBarHTML(flows, settings);
     listEl.innerHTML = flows.length
       ? flows.map((f) => flowCardHTML(f, settings)).join("")
-      : `<p class="empty-hint">Aucun flux rattaché à ce bien pour l'instant.</p>`;
+      : `<p class="placeholder">Aucun flux rattaché à ce bien pour l'instant.</p>`;
   }
 
   // ---------------------------------------------------------------
@@ -438,29 +463,19 @@ const App = (() => {
 
     const listHTML = depenses.length
       ? `<div class="card-list">${depenses.map((f) => flowCardHTML(f, settings)).join("")}</div>`
-      : `<p class="empty-hint">Aucune dépense commune pour l'instant.</p>`;
+      : `<p class="placeholder">Aucune dépense commune pour l'instant.</p>`;
+
+    const groupHTML = (title, flows) =>
+      flows.length
+        ? `<div><h2 class="section-title">${title}</h2><div class="card-list">${flows.map((f) => flowCardHTML(f, settings)).join("")}</div></div>`
+        : "";
 
     const otherShared = recurring.filter((f) => !depenseTypes.includes(f.flowType));
-    const otherHTML = otherShared.length
-      ? `
-      <div class="card">
-        <h2 class="section-title">Autres flux partagés (crédit / épargne)</h2>
-        <div class="card-list">${otherShared.map((f) => flowCardHTML(f, settings)).join("")}</div>
-      </div>`
-      : "";
-
-    const oneTimeHTML = oneTime.length
-      ? `
-      <div class="card">
-        <h2 class="section-title">Flux ponctuels partagés</h2>
-        <div class="card-list">${oneTime.map((f) => flowCardHTML(f, settings)).join("")}</div>
-      </div>`
-      : "";
 
     document.getElementById("commun-content").innerHTML = `
-      <div class="card treasury-hero neutral">
-        <span class="treasury-hero-label">Dépenses communes mensuelles</span>
-        <span class="treasury-hero-amount">${Calc.formatEUR(totalDepenses)}</span>
+      <div class="card hero-card">
+        <span class="hero-label">Dépenses communes mensuelles</span>
+        <span class="hero-amount">${Calc.formatEUR(totalDepenses)}</span>
         <div class="split-stats">
           <div class="split-stat">
             <span class="split-stat-label">Ma part</span>
@@ -473,8 +488,8 @@ const App = (() => {
         </div>
       </div>
       ${listHTML}
-      ${otherHTML}
-      ${oneTimeHTML}
+      ${groupHTML("Autres flux partagés (crédit / épargne)", otherShared)}
+      ${groupHTML("Flux ponctuels partagés", oneTime)}
     `;
   }
 
@@ -500,29 +515,25 @@ const App = (() => {
     const rows = types
       .map(
         (t) => `
-      <div class="treasury-row">
-        <span class="treasury-row-label">${Calc.FLOW_TYPE_LABELS[t]}</span>
-        <span class="treasury-row-values">
-          <strong>${Calc.formatEUR(totals[t])}</strong>
-        </span>
+      <div class="list-row">
+        <span>${Calc.FLOW_TYPE_LABELS[t]}</span>
+        <span class="list-row-value">${Calc.formatEUR(totals[t])}</span>
       </div>`
       )
       .join("");
 
     const oneTimeHTML = oneTime.length
-      ? `
-      <div class="card">
-        <h2 class="section-title">Flux ponctuels (hors calcul mensuel)</h2>
-        <div class="card-list">${oneTime.map((f) => flowCardHTML(f, settings)).join("")}</div>
-      </div>`
+      ? `<div><h2 class="section-title">Flux ponctuels (hors calcul mensuel)</h2><div class="card-list">${oneTime
+          .map((f) => flowCardHTML(f, settings))
+          .join("")}</div></div>`
       : "";
 
     document.getElementById("treasury-content").innerHTML = `
-      <div class="card treasury-hero ${resteMine >= 0 ? "positive" : "negative"}">
-        <span class="treasury-hero-label">Reste à vivre mensuel</span>
-        <span class="treasury-hero-amount">${Calc.formatEUR(resteMine)}</span>
+      <div class="card hero-card">
+        <span class="hero-label">Reste à vivre mensuel</span>
+        <span class="hero-amount ${resteMine >= 0 ? "positive" : "negative"}">${Calc.formatEUR(resteMine)}</span>
       </div>
-      <div class="card">
+      <div class="card list-card">
         ${rows}
       </div>
       ${oneTimeHTML}
@@ -545,7 +556,7 @@ const App = (() => {
 
   function savingsLineChartSVG(points) {
     if (points.length < 2) {
-      return `<p class="empty-hint">Ajoute des soldes sur au moins deux mois pour voir l'évolution.</p>`;
+      return `<p class="placeholder">Ajoute des soldes sur au moins deux mois pour voir l'évolution.</p>`;
     }
     const width = 320, height = 140, padding = 28;
     const values = points.map((p) => p.total);
@@ -578,24 +589,25 @@ const App = (() => {
 
   const LIQUIDITY_LABELS = { disponible: "Disponible", bloquee: "Bloquée" };
 
+  function deltaHTML(delta, prefix = "") {
+    const up = delta >= 0;
+    return `<span class="delta ${up ? "delta-up" : "delta-down"}"><i class="ph-fill ph-caret-${up ? "up" : "down"}" aria-hidden="true"></i>${prefix}${Calc.formatEUR(Math.abs(delta))}</span>`;
+  }
+
   function savingsAccountCardHTML(acc) {
     const bal = balanceFor(acc.id, savingsMonth);
     const prev = previousBalanceFor(acc.id, savingsMonth);
     const delta = bal && prev ? Calc.round2(bal.balance - prev.balance) : null;
-    const deltaHTML =
-      delta === null
-        ? ""
-        : `<span class="delta ${delta >= 0 ? "delta-up" : "delta-down"}">${delta >= 0 ? "▲" : "▼"} ${Calc.formatEUR(Math.abs(delta))}</span>`;
     return `
       <div class="card savings-row">
         <div class="savings-row-head">
           <span class="savings-row-name">${escapeHtml(acc.name)}</span>
-          ${deltaHTML}
+          ${delta === null ? "" : deltaHTML(delta)}
         </div>
-        <label class="field savings-balance-field">
-          <span>Solde — ${capitalize(monthLabel(savingsMonth))}</span>
-          <input type="text" inputmode="decimal" class="savings-balance-input" data-account-id="${acc.id}" value="${bal ? bal.balance.toFixed(2) : ""}" placeholder="0,00">
-        </label>
+        <div class="field savings-balance-field">
+          <label class="field-label" for="balance-${acc.id}">Solde — ${capitalize(monthLabel(savingsMonth))}</label>
+          <input class="input savings-balance-input" type="text" inputmode="decimal" autocomplete="off" id="balance-${acc.id}" data-account-id="${acc.id}" value="${bal ? bal.balance.toFixed(2) : ""}" placeholder="0,00">
+        </div>
       </div>`;
   }
 
@@ -618,7 +630,7 @@ const App = (() => {
     const listEl = document.getElementById("savings-accounts-list");
 
     if (accounts.length === 0) {
-      listEl.innerHTML = `<p class="empty-hint">Ajoute un support d'épargne (Livret A, PEL, Assurance-vie…) pour commencer.</p>`;
+      listEl.innerHTML = `<p class="placeholder">Ajoute un support d'épargne (Livret A, PEL, Assurance-vie…) pour commencer.</p>`;
     } else {
       listEl.innerHTML =
         savingsGroupHTML(LIQUIDITY_LABELS.disponible, disponibleAccounts) + savingsGroupHTML(LIQUIDITY_LABELS.bloquee, bloqueeAccounts);
@@ -639,11 +651,11 @@ const App = (() => {
     const totalDelta = hasPrev ? Calc.round2(totalNow - totalPrev) : null;
 
     document.getElementById("savings-total-card").innerHTML = `
-      <span class="savings-total-label">Total épargne</span>
-      <span class="savings-total-amount">${Calc.formatEUR(totalNow)}</span>
+      <span class="hero-label">Total épargne</span>
+      <span class="hero-amount">${Calc.formatEUR(totalNow)}</span>
       ${totalDelta === null
-        ? `<span class="savings-total-sub">Pas de solde le mois précédent pour comparer</span>`
-        : `<span class="delta ${totalDelta >= 0 ? "delta-up" : "delta-down"}">Mensuel ${totalDelta >= 0 ? "▲" : "▼"} ${Calc.formatEUR(Math.abs(totalDelta))}</span>`}
+        ? `<span class="hero-sub">Pas de solde le mois précédent pour comparer</span>`
+        : deltaHTML(totalDelta, "Mensuel ")}
       <div class="split-stats">
         <div class="split-stat">
           <span class="split-stat-label">Disponible</span>
@@ -678,32 +690,32 @@ const App = (() => {
     `;
   }
 
-  const DRAG_HANDLE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
-
   function manageListModalHTML(config, items) {
     const withLiquidity = !!config.withLiquidity;
     const withReorder = !!config.withReorder;
     return `
-      <h3 class="modal-title">${config.title}</h3>
+      <h3 class="sheet-title">${config.title}</h3>
       <div class="manage-list">
         ${items
           .map(
             (it) => `
           <div class="manage-row" data-id="${it.id}">
-            ${withReorder ? `<div class="manage-row-handle" aria-label="Glisser pour réordonner">${DRAG_HANDLE_SVG}</div>` : ""}
-            <input type="text" class="manage-row-input" value="${escapeHtml(it.name)}">
-            ${withLiquidity ? `<select class="manage-row-liquidity">${liquiditySelectOptionsHTML(it.liquidity)}</select>` : ""}
-            <button type="button" class="icon-btn" data-action="delete-item" aria-label="Supprimer">🗑</button>
+            ${withReorder ? `<div class="manage-row-handle" aria-label="Glisser pour réordonner"><i class="ph ph-dots-six-vertical" aria-hidden="true"></i></div>` : ""}
+            <input type="text" class="input manage-row-input" value="${escapeHtml(it.name)}" autocomplete="off">
+            ${withLiquidity ? `<select class="input manage-row-liquidity">${liquiditySelectOptionsHTML(it.liquidity)}</select>` : ""}
+            <button type="button" class="icon-btn" data-action="delete-item" aria-label="Supprimer"><i class="ph ph-trash" aria-hidden="true"></i></button>
           </div>`
           )
-          .join("") || `<p class="empty-hint">Rien pour l'instant.</p>`}
+          .join("") || `<p class="placeholder">Rien pour l'instant.</p>`}
       </div>
       <form id="manage-add-form" class="manage-add-form">
-        <input type="text" id="manage-add-input" placeholder="${config.addPlaceholder}">
-        ${withLiquidity ? `<select id="manage-add-liquidity">${liquiditySelectOptionsHTML("disponible")}</select>` : ""}
+        <input type="text" class="input" id="manage-add-input" placeholder="${config.addPlaceholder}" autocomplete="off">
+        ${withLiquidity ? `<select class="input" id="manage-add-liquidity">${liquiditySelectOptionsHTML("disponible")}</select>` : ""}
         <button type="submit" class="btn btn-secondary">Ajouter</button>
       </form>
-      <button type="button" class="btn btn-ghost btn-block" data-action="close-modal">Fermer</button>
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-primary" data-action="close-modal">Terminé</button>
+      </div>
     `;
   }
 
@@ -726,9 +738,9 @@ const App = (() => {
           const ok = await confirmDialog("Supprimer cet élément ? Les flux déjà associés resteront mais ne seront plus rattachés.");
           if (ok) {
             await config.onDelete(row.dataset.id);
-            render();
             config.afterChange();
           }
+          render();
         }
       };
       root.querySelectorAll(".manage-row-input").forEach((input) => {
@@ -854,15 +866,15 @@ const App = (() => {
   function openSettingsModal() {
     const settings = Storage.getSettings();
     openModal(`
-      <h3 class="modal-title">Réglages</h3>
+      <h3 class="sheet-title">Réglages</h3>
       <form id="settings-form">
-        <label class="field">
-          <span>Répartition par défaut avec Jérôme — ma part (%)</span>
-          <input type="text" id="settings-default-percent" inputmode="decimal" value="${settings.defaultSharePercent}">
-        </label>
-        <p class="field-hint">S'applique par défaut aux nouveaux flux partagés ; ajustable flux par flux.</p>
-        <div class="session-actions">
-          <button type="button" class="btn btn-ghost" data-action="close-modal">Fermer</button>
+        <div class="field">
+          <label class="field-label" for="settings-default-percent">Répartition par défaut avec Jérôme — ma part (%)</label>
+          <input class="input" type="text" id="settings-default-percent" inputmode="decimal" autocomplete="off" value="${settings.defaultSharePercent}">
+          <p class="field-hint">S'applique par défaut aux nouveaux flux partagés ; ajustable flux par flux.</p>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn btn-secondary" data-action="close-modal">Fermer</button>
           <button type="submit" class="btn btn-primary">Enregistrer</button>
         </div>
       </form>
@@ -910,7 +922,7 @@ const App = (() => {
   document.getElementById("btn-settings").addEventListener("click", openSettingsModal);
 
   document.getElementById("property-tabs").addEventListener("click", (e) => {
-    const btn = e.target.closest(".segmented-btn");
+    const btn = e.target.closest(".chip");
     if (!btn) return;
     currentPropertyTab = btn.dataset.propertyId;
     renderPropertiesView();

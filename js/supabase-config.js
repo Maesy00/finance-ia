@@ -1,7 +1,7 @@
 /*
  * supabase-config.js — connexion à la base de données en ligne.
- * Projet Supabase dédié à Finance Nerd (séparé d'Aurora/Inventory.ia/Ironly
- * pour isoler les données financières) — compte de connexion distinct.
+ * Projet Supabase dédié à Finance.ia (séparé de Divers.ia, qui héberge les
+ * autres apps, pour isoler les données financières) — compte de connexion distinct.
  * L'URL et la clé publique ci-dessous sont publiques par design : la
  * sécurité vient des règles définies dans Supabase (chacun ne peut
  * lire/écrire que ses propres données), pas du secret de cette clé.
